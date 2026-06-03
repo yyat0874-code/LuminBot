@@ -1,62 +1,111 @@
+require("dotenv").config();
+
+const fs = require("fs");
+const path = require("path");
+
 const {
+    Client,
+    GatewayIntentBits,
     EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle
+    Events
 } = require("discord.js");
 
-module.exports = {
-    name: "help",
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
 
-    async execute(message) {
+client.commands = new Map();
 
-        const embed = new EmbedBuilder()
+const commandsPath = path.join(__dirname, "commands");
+const commandFiles = fs.readdirSync(commandsPath);
+
+for (const file of commandFiles) {
+    const command = require(`./commands/${file}`);
+    client.commands.set(command.name, command);
+}
+
+client.once(Events.ClientReady, () => {
+    console.log(`Бот запущен: ${client.user.tag}`);
+});
+
+client.on("messageCreate", async message => {
+
+    if (message.author.bot) return;
+
+    if (!message.content.startsWith("!")) return;
+
+    const args = message.content.slice(1).split(" ");
+    const commandName = args.shift().toLowerCase();
+
+    const command = client.commands.get(commandName);
+
+    if (!command) return;
+
+    try {
+        await command.execute(message, client, args);
+    } catch (err) {
+        console.error(err);
+    }
+
+});
+
+client.on("interactionCreate", async interaction => {
+
+    if (!interaction.isButton()) return;
+
+    let embed;
+
+    if (interaction.customId === "help_profile") {
+
+        embed = new EmbedBuilder()
             .setColor("#5865F2")
-            .setTitle("📚 LuminaBot — Центр помощи")
+            .setTitle("👤 Профиль")
             .setDescription(
-                "Выберите категорию ниже для просмотра команд.\n\n" +
-                "👤 Профили\n" +
-                "💰 Экономика\n" +
-                "🛡️ Модерация\n" +
-                "⚙️ Система"
-            )
-            .setThumbnail(
-                message.client.user.displayAvatarURL()
-            )
-            .setFooter({
-                text: "LuminaBot"
-            });
-
-        const row = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId("help_profile")
-                    .setLabel("Профиль")
-                    .setEmoji("👤")
-                    .setStyle(ButtonStyle.Primary),
-
-                new ButtonBuilder()
-                    .setCustomId("help_economy")
-                    .setLabel("Экономика")
-                    .setEmoji("💰")
-                    .setStyle(ButtonStyle.Success),
-
-                new ButtonBuilder()
-                    .setCustomId("help_moderation")
-                    .setLabel("Модерация")
-                    .setEmoji("🛡️")
-                    .setStyle(ButtonStyle.Danger),
-
-                new ButtonBuilder()
-                    .setCustomId("help_system")
-                    .setLabel("Система")
-                    .setEmoji("⚙️")
-                    .setStyle(ButtonStyle.Secondary)
+                "`!profile`\n`!setbio`\n`!setstatus`"
             );
+    }
 
-        await message.reply({
+    if (interaction.customId === "help_economy") {
+
+        embed = new EmbedBuilder()
+            .setColor("#57F287")
+            .setTitle("💰 Экономика")
+            .setDescription(
+                "`!balance`\n`!daily`\n`!farm`\n`!work`\n`!crime`\n`!casino`\n`!pay`\n`!top (Бета)`"
+            );
+    }
+
+    if (interaction.customId === "help_moderation") {
+
+        embed = new EmbedBuilder()
+            .setColor("#ED4245")
+            .setTitle("🛡️ Модерация")
+            .setDescription(
+                "`!kick`\n`!ban`\n`!mute`\n`!unmute`"
+            );
+    }
+
+    if (interaction.customId === "help_system") {
+
+        embed = new EmbedBuilder()
+            .setColor("#FEE75C")
+            .setTitle("⚙️ Система")
+            .setDescription(
+                "`!ping`\n`!help`"
+            );
+    }
+
+    if (embed) {
+        await interaction.reply({
             embeds: [embed],
-            components: [row]
+            ephemeral: true
         });
     }
-};
+
+});
+
+client.login(process.env.TOKEN);
